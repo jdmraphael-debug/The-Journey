@@ -1,0 +1,125 @@
+using UnityEngine;
+using UnityEngine.InputSystem;
+
+public class Shooter : MonoBehaviour
+{
+    private int _frameCounter;
+    [SerializeField] private Transform myTransform;
+    [SerializeField] private MeshRenderer meshRenderer;
+
+    private Color _currentColor = Color.white;
+    private Color _targetColor = Color.white;
+    private Vector3 _originalScale;
+    private float _pulseTimer;
+
+    // Shader property IDs for URP / Standard shaders
+    private static readonly int BaseColorProp = Shader.PropertyToID("_BaseColor");
+    private static readonly int ColorProp = Shader.PropertyToID("_Color");
+
+    void Start()
+    {
+        Debug.Log("Sphere Shooter Initialized");
+
+        if (myTransform == null)
+        {
+            myTransform = transform;
+        }
+
+        if (meshRenderer == null)
+        {
+            meshRenderer = GetComponent<MeshRenderer>();
+        }
+
+        _originalScale = myTransform.localScale;
+
+        // Read initial color directly from the sphere's material
+        if (meshRenderer != null && meshRenderer.material != null)
+        {
+            Material mat = meshRenderer.material;
+            if (mat.HasProperty(BaseColorProp))
+                _currentColor = mat.GetColor(BaseColorProp);
+            else if (mat.HasProperty(ColorProp))
+                _currentColor = mat.GetColor(ColorProp);
+
+            _targetColor = _currentColor;
+        }
+    }
+
+    void Update()
+    {
+        HandleMouseClick();
+        AnimateVisuals();
+    }
+
+    void FixedUpdate()
+    { 
+        _frameCounter++;
+        if (_frameCounter % 60 == 0)
+        {
+            Debug.Log($"Physics step: {_frameCounter / 60}");
+            myTransform.position += Vector3.up;
+        }
+    } 
+
+    private void HandleMouseClick()
+    {
+        // Detect left mouse button click
+        if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
+        {
+            // Raycast from camera to check if the user clicked directly on THIS sphere
+            Camera mainCam = Camera.main;
+            if (mainCam != null)
+            {
+                Ray ray = mainCam.ScreenPointToRay(Mouse.current.position.ReadValue());
+                if (Physics.Raycast(ray, out RaycastHit hit))
+                {
+                    if (hit.transform == myTransform || hit.transform == transform)
+                    {
+                        TriggerColorChange();
+                    }
+                }
+            }
+        }
+    }
+
+    private void TriggerColorChange()
+    {
+        // Pick a bright, vibrant random color
+        _targetColor = Random.ColorHSV(0f, 1f, 0.9f, 1f, 0.9f, 1f);
+        _pulseTimer = 1f;
+        Debug.Log($"Sphere Clicked! Target Color: {_targetColor}");
+    }
+
+    private void AnimateVisuals()
+    {
+        // Smoothly blend to the target color
+        _currentColor = Color.Lerp(_currentColor, _targetColor, Time.deltaTime * 10f);
+
+        // Apply color change to the Sphere's material
+        if (meshRenderer != null)
+        {
+            Material mat = meshRenderer.material;
+
+            if (mat.HasProperty(BaseColorProp))
+            {
+                mat.SetColor(BaseColorProp, _currentColor);
+            }
+            if (mat.HasProperty(ColorProp))
+            {
+                mat.SetColor(ColorProp, _currentColor);
+            }
+        }
+
+        // Radial squish/pulse effect
+        if (_pulseTimer > 0f)
+        {
+            _pulseTimer -= Time.deltaTime * 5f;
+            float scaleMultiplier = 1f + (Mathf.Sin(_pulseTimer * Mathf.PI) * 0.25f);
+            myTransform.localScale = _originalScale * scaleMultiplier;
+        }
+        else
+        {
+            myTransform.localScale = _originalScale;
+        }
+    }
+}
